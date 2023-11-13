@@ -64,11 +64,11 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, omega
 
 
     # argsort the velocities
-    sort = np.argsort(v)
+    # sort = np.argsort(v)
 
     # sort the velocities and fluxes
-    v = v[sort]
-    flux = flux[sort]
+    # v = v[sort]
+    # flux = flux[sort]
 
     # define the bins
     digitized = digitize(v, bins)
