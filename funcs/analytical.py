@@ -79,8 +79,9 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, omega
     # print(np.unique(digitized))
     flux_ = bincount(digitized, weights=flux, minlength=len(bins) - 1)
 
-    # normalize the flux
-    flux_ = flux_ / max(flux_)
+    # normalize the flux unless it is all zeros
+    if max(flux_) != 0:
+        flux_ = flux_ / max(flux_)
 
     return flux_
 

@@ -89,7 +89,8 @@ class AuroralRing:
         # define binmids for the velocity bins
         self.v_mids = (self.v_bins[1:] + self.v_bins[:-1]) / 2
 
-        self.THETA, self.PHI = create_spherical_grid(int(gridsize))
+        if gridsize > 0:
+            self.THETA, self.PHI = create_spherical_grid(int(gridsize))
 
         self.norm = norm
 

@@ -46,6 +46,7 @@ def numerical_spectral_line(alpha, x, y, z, z_rot, omega, Rstar, bins, dalpha=.1
     # print("numbins", _)
 
     # normalize the flux
-    flux = flux / np.max(flux)
+    if max(flux) != 0:
+        flux = flux / np.max(flux)
 
     return flux
