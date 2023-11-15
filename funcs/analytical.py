@@ -12,7 +12,7 @@ from numpy import pi, sin, cos, sqrt, abs, arcsin, max, digitize, bincount
 import numpy as np
 
 
-def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, omega, Rstar, norm=10):
+def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, convert_to_kms, norm=10):
     """Calculate the broadened spectral line of the infinitesimally narrow
     auroral ring.
     
@@ -60,24 +60,13 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, omega
     flux[x<0] = 0
 
     # # convert to stellar radii / s and then to km/s
-    v = v * omega / 86400 * Rstar * 695700. 
-
-
-    # argsort the velocities
-    # sort = np.argsort(v)
-
-    # sort the velocities and fluxes
-    # v = v[sort]
-    # flux = flux[sort]
+    v = v * convert_to_kms 
 
     # define the bins
     digitized = digitize(v, bins)
 
-    # flux_ = np.zeros_like(bins[:-1])
-
     # calculate the flux in each bin
-    # print(np.unique(digitized))
-    flux_ = bincount(digitized, weights=flux, minlength=len(bins) - 1)
+    flux_ = bincount(digitized.flatten(), weights=flux.flatten(), minlength=len(bins) - 1)
 
     # normalize the flux unless it is all zeros
     if max(flux_) != 0:

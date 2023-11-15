@@ -38,7 +38,9 @@ class AuroralRing:
     """
 
     # init function takes the parameters of the ring and sets up the phi array
-    def __init__(self, i_rot, i_mag, latitude, width, Rstar, P_rot, N=1000, gridsize=int(1e5), norm=10):
+    def __init__(self, i_rot, i_mag, latitude, width, Rstar, P_rot, 
+                 N=1000, gridsize=int(1e5), norm=10, v_bins=None,
+                 v_mids=None, phi=None, omega=None, convert_to_kms=None):
         """Initialize the AuroralRing class.
 
         Parameters
@@ -63,35 +65,64 @@ class AuroralRing:
             calculation of the ring.
         norm : float
             The normalization factor to use for the flux.
+        v_bins : array
+            The velocity bins to use for the spectral line.
+        v_mids : array
+            The midpoints of the velocity bins.
+        phi : array
+            The phase angles of the ring in rad. From 0 to 2 pi.
+        omega : float
+            The rotation rate of the star in rad / day.
+        convert_to_kms : float  
+            The conversion factor to convert from stellar radii / s to km / s.
         """
         self.i_rot = i_rot
         self.i_mag = i_mag
         self.latitude = latitude
-        self.width = width
         self.Rstar = Rstar
-        self.P_rot = P_rot
+
+
+
+        if omega is None:
+            self.P_rot = P_rot
+            self.omega = 2 * np.pi / self.P_rot
+        else:   
+            self.omega = omega
+
+        if convert_to_kms is None:
+            self.convert_to_kms = self.Rstar * 695700. / 86400.
+        else:
+            self.convert_to_kms = convert_to_kms
 
         # set up the phi array
-        self.phi = np.linspace(0, 2*np.pi, N*30)
-
-        # calculate omega
-        self.omega = 2 * np.pi / self.P_rot
+        if phi is None:
+            self.phi = np.linspace(0, 2*np.pi, N*30)
+        else:
+            self.phi = phi
 
         # set up velocity bins based on the highest possible velocity
-        vmax = self.omega * self.Rstar * 695700. / 86400. # km/s
-
-        self.v_bins = np.linspace(-vmax*1.05, vmax*1.05, N)
+        if v_bins is None:
+            # calculate omega
+            
+            vmax = self.omega * self.Rstar * 695700. / 86400. # km/s
+            self.v_bins = np.linspace(-vmax*1.05, vmax*1.05, N)
+        else:
+            self.v_bins = v_bins
 
         # calculate max and min latitude of the ring using width
-        self.lat_min = latitude - width/2
-        self.lat_max = latitude + width/2
-
-        # define binmids for the velocity bins
-        self.v_mids = (self.v_bins[1:] + self.v_bins[:-1]) / 2
-
         if gridsize > 0:
+            self.width = width
+            self.lat_min = latitude - width/2
+            self.lat_max = latitude + width/2
             self.THETA, self.PHI = create_spherical_grid(int(gridsize))
 
+        # define binmids for the velocity bins
+        if v_mids is None:
+            self.v_mids = (self.v_bins[1:] + self.v_bins[:-1]) / 2
+        else:
+            self.v_mids = v_mids
+
+        # normalization factor for the analytical flux calculation
         self.norm = norm
 
     # define a method to get the flux of the ring
@@ -109,7 +140,7 @@ class AuroralRing:
             The flux of the ring at the given rotational phase.
         """
         return get_analytical_spectral_line(self.phi, self.i_rot, self.i_mag, self.latitude, 
-                                            alpha, self.v_bins, self.omega, self.Rstar, norm=self.norm)
+                                            alpha, self.v_bins, self.convert_to_kms, norm=self.norm)
     
     # define a method to get the flux of the ring numerically
     def get_flux_numerically(self, alpha):
