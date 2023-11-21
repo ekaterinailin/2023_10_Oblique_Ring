@@ -1,1 +1,6 @@
 /.venv
+/plots/*
+*.pyc
+*.csv
+*.so
+*.o

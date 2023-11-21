@@ -30,13 +30,11 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
         The rotational phase of the star in rad.
     bins : int
         The number of velocity bins to use for the spectral line.
-    omega : float
-        The rotation rate of the star in rad / day.
-    Rstar : float
-        The radius of the star in solar radii.
     norm : float
         The normalization factor for the flux. Default is 10.
-
+    convert_to_kms : float
+        The conversion factor to convert from stellar radii / s to km / s.pyt
+        
     Returns
     -------
     flux : array
@@ -55,23 +53,28 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
 
     # get the flux
     flux = flux_at_x_vx(v, x, X, Y, Z, norm=norm)
+    # print(flux.shape)
 
     # mask the flux
     flux[x<0] = 0
-
+    # print(flux.shape)
     # # convert to stellar radii / s and then to km/s
     v = v * convert_to_kms 
 
     # define the bins
     digitized = digitize(v, bins)
 
+
+    # print(v, np.max(digitized), np.min(digitized), len(bins) - 1)
     # calculate the flux in each bin
     flux_ = bincount(digitized.flatten(), weights=flux.flatten(), minlength=len(bins) - 1)
 
+    # flux_, bins = np.histogram(v, bins=bins, weights=flux)
+    # print(flux_.shape,  len(bins)-1)
     # normalize the flux unless it is all zeros
     if max(flux_) != 0:
         flux_ = flux_ / max(flux_)
-
+    # print(flux_.shape)
     return flux_
 
 
