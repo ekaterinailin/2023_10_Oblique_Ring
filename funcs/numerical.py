@@ -1,7 +1,7 @@
 from .geometry import rotate_around_arb_axis, calculate_surface_element_velocities
 import numpy as np
 
-def numerical_spectral_line(alpha, x, y, z, z_rot, omega, Rstar, bins, dalpha=.1 * np.pi/180):
+def numerical_spectral_line(alpha, x, y, z, z_rot, omega, Rstar, bins, dalpha=.1 * np.pi/180, normalize=True):
     """Calculate the broadened spectral line of the ring defined
     by x, y, z.
 
@@ -46,7 +46,8 @@ def numerical_spectral_line(alpha, x, y, z, z_rot, omega, Rstar, bins, dalpha=.1
     # print("numbins", _)
 
     # normalize the flux
-    if max(flux) != 0:
-        flux = flux / np.max(flux)
+    if normalize:
+        if max(flux) != 0:
+            flux = flux / np.max(flux)
 
     return flux

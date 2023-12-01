@@ -25,12 +25,14 @@ def get_full_rotation_line(ring: AuroralRing, alpha=ALPHA) -> np.array:
     if mf != 0:
         full_flux_analytical /= mf
 
+    full_flux_analytical = np.insert(full_flux_analytical[1:],-1,0)
+
     return full_flux_analytical
 
 
 def log_prior(theta: tuple) -> float:
-    i, m, l, logf = theta
-    if  (0<i<1) and (0 < m < 1) and (0 < l < 1) and (-10 < logf < 1):
+    i, m, l= theta
+    if  (0<i<1) and (0 < m < 1) and (0 < l < 1):
         return 0.0
     return -np.inf
 
@@ -63,13 +65,13 @@ if __name__ == "__main__":
 
     # results.to_csv('results/fit_fake_line_results.csv', index=False)
 
-    N = 20000
+    N = 10000
 
     # read in i_rot_true and i_mag_true as arguments to the script
     i_rot_true = float(sys.argv[1])
     i_mag_true = float(sys.argv[2])
 
-    name = f"2023_11_21_irot_{i_rot_true:.0f}_imag_{i_mag_true:.0f}"
+    name = f"2023_11_28_irot_{i_rot_true:.0f}_imag_{i_mag_true:.0f}"
 
     print("Fitting line for: ", name)
     
@@ -80,12 +82,12 @@ if __name__ == "__main__":
 
 
     # set up the ring
-    logf_true = np.log(0.5)
+    # logf_true = np.log(0.5)
     i_rot_true = i_rot_true / 180 * np.pi
     i_mag_true = i_mag_true * np.pi / 180
     sin_i_mag_true = np.sin(i_mag_true)
     sin_i_rot_true = np.sin(i_rot_true)
-    latitude_true = 88*np.pi/180
+    latitude_true = 65*np.pi/180
     sin_latitude_true = np.sin(latitude_true)
 
     # size of the line
@@ -106,20 +108,21 @@ if __name__ == "__main__":
     
     # set up the rin
     ring = AuroralRing(i_rot=i_rot_true, i_mag=i_mag_true, latitude=latitude_true,
-                    width=3.9 * np.pi/180, Rstar=1, P_rot=1.5 * np.pi, N=60, 
-                    norm=11, gridsize=int(4e5), v_bins=v_bins, v_mids=v_mids,
+                    width=.9 * np.pi/180, Rstar=1, P_rot=1.5 * np.pi, N=60, 
+                    norm=11, gridsize=int(6e5), v_bins=v_bins, v_mids=v_mids,
                     phi=phi, omega=omega, convert_to_kms=convert_to_kms)
     
 
     
     ffa_ = get_full_rotation_line(ring)
+    analytical_flux = ffa_.copy()
 
     # calculate the flux 
     # this serves as measurement
     full_flux_numerical = np.zeros_like(ring.v_mids)
 
     for alpha in np.linspace(0, 2*np.pi, n):
-        full_flux_numerical += ring.get_flux_numerically(alpha)
+        full_flux_numerical += ring.get_flux_numerically(alpha, normalize=False)
 
     # use numerical flux as input data
     ffa_ = full_flux_numerical.copy()
@@ -137,7 +140,7 @@ if __name__ == "__main__":
         f.write(f'# inclination of rot. axis = {i_rot_true*180/np.pi:.3f} deg\n')
         f.write(f'# mag. obliquity = {i_mag_true*180/np.pi:.3f} deg\n')
         f.write(f'# latitude = {latitude_true*180/np.pi:.3f} deg\n')
-        f.write(f'# logf = {logf_true:.3f}\n')
+        # f.write(f'# logf = {logf_true:.3f}\n')
         f.write(f'# rel. err. = {err:.3f}\n')
         f.write(f'# spectral line size = {n}\n')
         f.write(f'# stellar rotation period = {P_rot:.3f} d\n')
@@ -156,9 +159,9 @@ if __name__ == "__main__":
     # - SHOW THE INPUT FAKE LINE
     
     plt.figure(figsize=(7,6))
-    plt.errorbar(ring.v_mids, ffa, yerr = flux_err, label='analytical')
+    plt.errorbar(ring.v_mids, ffa, yerr = flux_err, label='model')
     plt.plot(ring.v_mids, full_flux_numerical, label='numerical')
-    plt.plot(ring.v_mids, ffa_, label='analytical true')
+    plt.plot(ring.v_mids, analytical_flux, label='analytical true')
     plt.legend(frameon=False)
     plt.xlabel('v [km/s]')
     plt.ylabel('normalized flux')
@@ -177,7 +180,7 @@ if __name__ == "__main__":
 
     def log_likelihood(theta: tuple) -> np.array:  
 
-        sin_i_rot, sin_i_mag, sin_latitude, log_f = theta
+        sin_i_rot, sin_i_mag, sin_latitude= theta
         
         model = get_analytical_spectral_line(phi, np.arcsin(sin_i_rot), 
                                                 np.arcsin(sin_i_mag), np.arcsin(sin_latitude), 
@@ -192,25 +195,25 @@ if __name__ == "__main__":
         if np.isnan(model).any():
             return -np.inf
         else:
-            sigma2 = flux_err**2 + model**2 * np.exp(2 * log_f)
+            sigma2 = flux_err**2 + model**2
             return -0.5 * np.sum((ffa - model) ** 2 / sigma2 + np.log(sigma2))
 
-    nll = lambda *args: -log_likelihood(*args)
-    initial = np.array([sin_i_rot_true, sin_i_mag_true, sin_latitude_true, logf_true]) + 0.01 * np.random.randn(4)
-    soln = minimize(nll, initial)
-    i, m, l, lf = soln.x
+    # nll = lambda *args: -log_likelihood(*args)
+    # initial = np.array([sin_i_rot_true, sin_i_mag_true, sin_latitude_true, logf_true]) + 0.01 * np.random.randn(4)
+    # soln = minimize(nll, initial)
+    # i, m, l, lf = soln.x
 
-    print("Maximum likelihood estimates:")
-    print("i_rot = {0:.3f}".format(np.arcsin(i)*180/np.pi))
-    print("logf = {0:.3f}".format(lf))
-    print("m = {0:.3f}".format(np.arcsin(m)*180/np.pi))
-    print("l = {0:.3f}".format(np.arcsin(l)*180/np.pi))
+    # print("Maximum likelihood estimates:")
+    # print("i_rot = {0:.3f}".format(np.arcsin(i)*180/np.pi))
+    # print("logf = {0:.3f}".format(lf))
+    # print("m = {0:.3f}".format(np.arcsin(m)*180/np.pi))
+    # print("l = {0:.3f}".format(np.arcsin(l)*180/np.pi))
 
 
     # - MCMC
 
     # initialize the walkers
-    pos = soln.x + 1e-2 * np.random.randn(32, 4)
+    pos = np.array([0.5,0.5,0.5]) + 0.49 * np.random.randn(32, 3)
     nwalkers, ndim = pos.shape
 
     # parallelize the process
@@ -224,8 +227,8 @@ if __name__ == "__main__":
 
     # - SAVE the MCMC chain
 
-    samples = sampler.get_chain()[:,:, :-1]
-    samples = samples.reshape(-1, ndim-1)
+    samples = sampler.get_chain()
+    samples = samples.reshape(-1, ndim)
     df = pd.DataFrame(samples, columns=['sin_i_rot', 'sin_i_mag', 'sin_latitude'])
     df.to_csv(f'plots/fit_fake_line/{name}/chain.csv', index=False)
 
@@ -235,7 +238,7 @@ if __name__ == "__main__":
     samples = sampler.get_chain()
     labels = ["i", "m", "l"]
 
-    for i in range(ndim-1):
+    for i in range(ndim):
         ax = axes[i]
         ax.plot(np.arcsin(samples[:, :, i])*180/np.pi, "w", alpha=0.3)
         ax.set_xlim(0, len(samples))
@@ -247,7 +250,7 @@ if __name__ == "__main__":
 
     # - CORNER PLOT
 
-    flat_samples = sampler.get_chain(discard=5000, thin=15, flat=True)[:,:-1]
+    flat_samples = sampler.get_chain(discard=5000, thin=15, flat=True)
 
     fs = np.arcsin(flat_samples)*180/np.pi
 
@@ -262,7 +265,6 @@ if __name__ == "__main__":
             f.write(f'{name}\n')
         
     # calculate i_rot, i_mag, latitude at 16th, 50th and 84th percentiles
-    print(fs.shape, fs[:, 0].shape)
     sin_i_rot_16, sin_i_rot_50, sin_i_rot_84 = np.percentile(samples[:,:, 0], [16, 50, 84])
     sin_i_mag_16, sin_i_mag_50, sin_i_mag_84 = np.percentile(samples[:,:, 1], [16, 50, 84])
     sin_lat_16, sin_lat_50, sin_lat_84 = np.percentile(samples[:,:, 2], [16, 50, 84])
@@ -278,7 +280,7 @@ if __name__ == "__main__":
                 f'{sin_i_mag_16},{sin_i_mag_50},{sin_i_mag_84},'
                 f'{sin_lat_16},{sin_lat_50},{sin_lat_84},'
                 f'{N},{nwalkers},'
-                f'{i},{m},{lf},{l}\n')
+                f'{0.5},{0.5},{0.5},{0.5}\n')
 
 
 

@@ -47,9 +47,14 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
     # get the parameters for the velocities
     X, Y, Z = vx_params(alpha, i_rot=i_rot, i_mag=i_mag, latitude=pi/2 - latitude)
 
+    # print("A, B, C", A, B, C)
+    # print("X, Y, Z", X, Y, Z)
+
     # get the velocities and positions
     v = v_phi(phi, X, Y, Z)
     x = x_phi(phi, A, B, C)
+
+    # print(v.shape, x.shape)
 
     # get the flux
     flux = flux_at_x_vx(v, x, X, Y, Z, norm=norm)
@@ -64,17 +69,13 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
     # define the bins
     digitized = digitize(v, bins)
 
-
-    # print(v, np.max(digitized), np.min(digitized), len(bins) - 1)
     # calculate the flux in each bin
-    flux_ = bincount(digitized.flatten(), weights=flux.flatten(), minlength=len(bins) - 1)
+    flux_ = bincount(digitized.flatten(order="C"), weights=flux.flatten(order="C"), minlength=len(bins) - 1)
 
-    # flux_, bins = np.histogram(v, bins=bins, weights=flux)
-    # print(flux_.shape,  len(bins)-1)
     # normalize the flux unless it is all zeros
     if max(flux_) != 0:
         flux_ = flux_ / max(flux_)
-    # print(flux_.shape)
+    
     return flux_
 
 
@@ -220,7 +221,7 @@ def flux_at_x_vx(vx, x, X, Y, Z, norm=10):
         The flux of the ring at the given positions and velocities.
     """
     foreshortening = cos(pi/2 - arcsin(x)) 
-    flux = 1 / sqrt(-(vx - X)**2 + Y**2 + Z**2 + norm*max(abs(vx-X)))
+    flux = 1 / sqrt(-(vx - X)**2 + Y**2 + Z**2 + norm)
     
     return flux * foreshortening
 

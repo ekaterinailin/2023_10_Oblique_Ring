@@ -143,7 +143,7 @@ class AuroralRing:
                                             alpha, self.v_bins, self.convert_to_kms, norm=self.norm)
     
     # define a method to get the flux of the ring numerically
-    def get_flux_numerically(self, alpha):
+    def get_flux_numerically(self, alpha, normalize=True):
         """Calculate the flux of the ring at a given rotational phase.
 
         Parameters
@@ -162,7 +162,8 @@ class AuroralRing:
                                                                             self.i_rot, self.i_mag)
 
         # calculate the flux
-        return numerical_spectral_line(alpha, self.x, self.y, self.z, self.z_rot, self.omega, self.Rstar, self.v_bins)
+        return numerical_spectral_line(alpha, self.x, self.y, self.z, self.z_rot,
+                                       self.omega, self.Rstar, self.v_bins, normalize=normalize)
     
 
     def plot_sphere_with_auroral_ring(self, ax, alpha):
