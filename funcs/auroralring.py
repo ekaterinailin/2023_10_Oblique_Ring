@@ -105,9 +105,10 @@ class AuroralRing:
             # calculate omega
             
             vmax = self.omega * self.Rstar * 695700. / 86400. # km/s
-            self.v_bins = np.linspace(-vmax*1.05, vmax*1.05, N)
+            self.v_bins = np.linspace(-vmax*1.02, vmax*1.02, N)
         else:
             self.v_bins = v_bins
+
 
         # calculate max and min latitude of the ring using width
         if gridsize > 0:
@@ -160,7 +161,7 @@ class AuroralRing:
         (self.x, self.y, self.z), self.z_rot, self.z_rot_mag = set_up_oblique_auroral_ring(self.THETA, self.PHI, 
                                                                             self.lat_max, self.lat_min, 
                                                                             self.i_rot, self.i_mag)
-
+        
         # calculate the flux
         return numerical_spectral_line(alpha, self.x, self.y, self.z, self.z_rot,
                                        self.omega, self.Rstar, self.v_bins, normalize=normalize)

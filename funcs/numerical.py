@@ -43,8 +43,6 @@ def numerical_spectral_line(alpha, x, y, z, z_rot, omega, Rstar, bins, dalpha=.1
     # bin the flux
     flux, _ = np.histogram(dxr_visible, bins=bins, weights=np.cos(np.pi/2 - np.arcsin(xr[q])))
 
-    # print("numbins", _)
-
     # normalize the flux
     if normalize:
         if max(flux) != 0:

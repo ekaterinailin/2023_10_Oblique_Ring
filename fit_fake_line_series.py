@@ -14,20 +14,6 @@ from multiprocessing import Pool
 import emcee
 import corner
 
-ALPHA = np.linspace(0, 2*np.pi, 100).reshape(100,1)
-
-def get_full_rotation_line(ring: AuroralRing, alpha=ALPHA) -> np.array:
-
-    full_flux_analytical = ring.get_flux_analytically(alpha)
-
-    # mf = np.max(full_flux_analytical)
-    
-    # if mf != 0:
-    #     full_flux_analytical /= mf
-
-    # full_flux_analytical = np.insert(full_flux_analytical[1:],-1,0)
-
-    return full_flux_analytical
 
 
 def log_prior(theta: tuple) -> float:
@@ -65,7 +51,12 @@ if __name__ == "__main__":
 
     # results.to_csv('results/fit_fake_line_results.csv', index=False)
 
-    N = 30000
+    N = 20000
+
+    alpha1 = np.linspace(0, np.pi, 50).reshape(50,1)
+    alpha2 = np.linspace(np.pi, 2*np.pi, 50).reshape(50,1)
+    alphas = [alpha1, alpha2]
+    ALPHA = np.linspace(0, 2*np.pi, 100).reshape(100,1)
 
     # read in i_rot_true and i_mag_true as arguments to the script
     i_rot_true = float(sys.argv[1])
@@ -101,40 +92,39 @@ if __name__ == "__main__":
     convert_to_kms = omega / 86400 * Rstar * 695700.
 
     # velocity bins and angle bins
-    v_bins = np.linspace(-vmax*1.05, vmax*1.05, 101)
+    v_bins = np.linspace(-vmax*1.025, vmax*1.025, 101)
     v_mids = (v_bins[1:] + v_bins[:-1])/2
-    phi = np.linspace(0, 2*np.pi, 360)
+    phi = np.linspace(0, 2*np.pi, 720)
 
     
     # set up the rin
     ring = AuroralRing(i_rot=i_rot_true, i_mag=i_mag_true, latitude=latitude_true,
-                    width=4. * np.pi/180, Rstar=1, P_rot=1.5 * np.pi, N=60, 
+                    width=1 * np.pi/180, Rstar=1, P_rot=1.5 * np.pi, N=60, 
                     norm=11, gridsize=int(6e5), v_bins=v_bins, v_mids=v_mids,
                     phi=phi, omega=omega, convert_to_kms=convert_to_kms)
     
 
+    af = [ring.get_flux_analytically(a) for a in alphas]
     
-    ffa_ = get_full_rotation_line(ring)
-    analytical_flux = ffa_.copy()
 
     # calculate the flux 
     # this serves as measurement
-    full_flux_numerical = np.zeros_like(ring.v_mids)
+    
+    ffa_ = []
+    for alpha in alphas:
+        f = np.zeros_like(ring.v_mids)
+        for a in alpha.flatten():
+            f += ring.get_flux_numerically(a, normalize=False)
+        f = f / np.max(f)
+        ffa_.append(f)
 
-    for alpha in np.linspace(0, 2*np.pi, n):
-        full_flux_numerical += ring.get_flux_numerically(alpha, normalize=False)
-
-    # use numerical flux as input data
-    ffa_ = full_flux_numerical.copy()
-    ffa_ = ffa_ / np.max(ffa_)
 
     # add some noise
-    err = 0.02
-    flux_err = np.ones_like(v_mids) * err
-    ffa =  ffa_ - err/2 + np.random.randn(len(ffa_)) * err
-    full_flux_numerical /= np.max(full_flux_numerical)
-
-
+    err = 0.01
+    flux_err = [np.array([np.sqrt(x * 10000)/10000 if x > 0 else 0.01 for x in f]) for f in ffa_]
+    ffa =  [f + np.random.normal(0,ferr)  for f, ferr in zip(ffa_, flux_err )]
+    
+    print(ffa[0].shape, ffa[1].shape, flux_err[0].shape, flux_err[1].shape)
     # - write out a file with the input data using f-notation
     with open(f'plots/fit_fake_line/{name}/input.txt', 'w') as f:
         f.write(f'# inclination of rot. axis = {i_rot_true*180/np.pi:.3f} deg\n')
@@ -152,16 +142,18 @@ if __name__ == "__main__":
 
     # - write out the data and true line, i.e. vmids, ffa, and full_flux_numerical
     # make a pandas dataframe
-    df = pd.DataFrame({'v_mids': v_mids, 'ffa': ffa, 'full_flux_numerical': full_flux_numerical})
+    df = pd.DataFrame({'v_mids': v_mids, 'ffa1': ffa[0], 'flux_analytical1': af[0],
+                          'ffa2': ffa[1], 'flux_analytical2': af[1]})
     df.to_csv(f'plots/fit_fake_line/{name}/data.csv', index=False)
 
 
     # - SHOW THE INPUT FAKE LINE
     
     plt.figure(figsize=(7,6))
-    plt.errorbar(ring.v_mids, ffa, yerr = flux_err, label='model')
-    plt.plot(ring.v_mids, full_flux_numerical, label='numerical')
-    plt.plot(ring.v_mids, analytical_flux, label='analytical true')
+    for f, err in zip(ffa, flux_err):
+        plt.errorbar(ring.v_mids, f, yerr = err, label='model')
+    for f in af:
+        plt.plot(ring.v_mids, f, label='analytical true')
     plt.legend(frameon=False)
     plt.xlabel('v [km/s]')
     plt.ylabel('normalized flux')
@@ -172,9 +164,10 @@ if __name__ == "__main__":
 
     fig, ax = ring.plot_setup_sphere()
 
-    ring.plot_sphere_with_auroral_ring(ax, alpha=alpha)
+    ring.plot_sphere_with_auroral_ring(ax, alpha=0)
     ring.plot_layout_sphere(ax, view="observer left")
     plt.savefig(f'plots/fit_fake_line/{name}/setup.png', dpi=300)
+    plt.close()
 
     # - LOG-LIKELIHOOD ESTIMATE
 
@@ -182,21 +175,29 @@ if __name__ == "__main__":
 
         sin_i_rot, sin_i_mag, sin_latitude= theta
         
-        model = get_analytical_spectral_line(phi, np.arcsin(sin_i_rot), 
+        model = []
+        for alpha in alphas:
+            model.append(get_analytical_spectral_line(phi, np.arcsin(sin_i_rot), 
                                                 np.arcsin(sin_i_mag), np.arcsin(sin_latitude), 
-                                                ALPHA, v_bins, convert_to_kms=convert_to_kms, 
-                                                norm=11)
+                                                alpha, v_bins, convert_to_kms=convert_to_kms, 
+                                                norm=11))
+        if np.random.randint(0,high=10000) == 1:
+            plt.figure(figsize=(7,6))
+            plt.plot(v_mids, model[0], label='model')
+            plt.plot(v_mids, model[1], label='model')
+            plt.plot(v_mids, ffa[0], label='data')
+            plt.plot(v_mids, ffa[1], label='data')
+            plt.savefig(f'plots/fit_fake_line/{name}/model_{np.random.randint(0,high=10000)}.png', dpi=300)
+            plt.close()
 
-        mf = np.max(model)
-        
-        if mf != 0:
-            model /= mf
-
-        if np.isnan(model).any():
-            return -np.inf
+        for m in model:
+            if np.isnan(m).any():
+                return -np.inf
         else:
-            sigma2 = flux_err**2 + model**2
-            return -0.5 * np.sum((ffa - model) ** 2 / sigma2 + np.log(sigma2))
+            sigma2_1 = flux_err[0]**2 + model[0]**2
+            sigma2_2 = flux_err[1]**2 + model[1]**2
+            return -0.5 * np.sum((ffa[0] - model[0]) ** 2 / sigma2_1 + np.log(2* np.pi *sigma2_1) +
+                                 (ffa[1] - model[1]) ** 2 / sigma2_2 + np.log(2* np.pi *sigma2_2))
 
     # nll = lambda *args: -log_likelihood(*args)
     # initial = np.array([sin_i_rot_true, sin_i_mag_true, sin_latitude_true, logf_true]) + 0.01 * np.random.randn(4)

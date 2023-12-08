@@ -75,6 +75,8 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
     # normalize the flux unless it is all zeros
     if max(flux_) != 0:
         flux_ = flux_ / max(flux_)
+
+    flux_ = np.insert(flux_[1:],-1,0)
     
     return flux_
 
