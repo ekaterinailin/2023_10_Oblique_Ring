@@ -43,9 +43,6 @@ def numerical_spectral_line(alpha, x, y, z, z_rot, omega, Rstar, bins, dalpha=1e
     # define the visible part of the ring
     q = xr > 0
 
-    plt.scatter(xr[q], dxr_visible, s=0.5)
-
-
     # bin the flux
     flux, _ = np.histogram(dxr_visible, bins=bins, weights=np.cos(np.pi/2 - np.arcsin(xr[q])))
 

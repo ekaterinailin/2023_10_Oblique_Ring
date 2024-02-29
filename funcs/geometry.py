@@ -53,8 +53,6 @@ def set_up_oblique_auroral_ring(THETA, PHI, PHI_max, PHI_min,
                                    np.sin(THETA[q])*np.sin(PHI[q]),
                                    np.cos(THETA[q])]))
      
-     print(x.shape)
-
      # rotate the z axis with Rrot
      z_rot = np.array([0, 0, 1])
      z_rot = np.dot(Rrot, z_rot)

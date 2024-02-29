@@ -63,13 +63,15 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
     # convert to km/s
     v = v[q] * convert_to_kms 
 
-    flux_, bins = np.histogram(v, bins=bins, weights=flux[q])
+    # flux_, bins = np.histogram(v, bins=bins, weights=flux[q])
+
+    digitized = digitize(v, bins)
+
+    flux_ = bincount(digitized, weights=flux[q], minlength=len(bins) - 1)
 
     # normalize the flux unless it is all zeros
     if max(flux_) != 0:
         flux_ = flux_ / max(flux_)
-
-    # flux_ = np.insert(flux_[1:],-1,0)
     
     return flux_
 

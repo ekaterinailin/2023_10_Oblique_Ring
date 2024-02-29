@@ -83,8 +83,8 @@ if __name__ == "__main__":
     
     # set up the rin
     ring = AuroralRing(i_rot=i_rot_true, i_mag=i_mag_true, latitude=latitude_true,
-                    width=2 * np.pi/180, Rstar=Rstar, P_rot=P_rot, N=60, 
-                     gridsize=int(4e6), v_bins=v_bins, v_mids=v_mids,
+                    width=1 * np.pi/180, Rstar=Rstar, P_rot=P_rot, N=60, 
+                     gridsize=int(4e5), v_bins=v_bins, v_mids=v_mids,
                     phi=phi, omega=omega, convert_to_kms=convert_to_kms)
     
 
@@ -108,9 +108,10 @@ if __name__ == "__main__":
     flux_err = np.ones_like(v_mids) * err
     ffa =  ffa_ + np.random.normal(0, err, len(ffa_))
     full_flux_numerical /= np.max(full_flux_numerical)
+    alpha = np.linspace(int_from, int_to, 100).reshape(100,1)
 
     model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude_true,
-                                        np.linspace(int_from, int_to, 100).reshape(100,1), v_bins, convert_to_kms=convert_to_kms)
+                                        alpha, v_bins, convert_to_kms=convert_to_kms)
    
 
 
@@ -148,109 +149,104 @@ if __name__ == "__main__":
     plt.close()
 
 
-    # # - SHOW THE GEOMETRICAL SETUP
+    # - SHOW THE GEOMETRICAL SETUP
 
-    # fig, ax = ring.plot_setup_sphere()
+    fig, ax = ring.plot_setup_sphere()
 
-    # ring.plot_sphere_with_auroral_ring(ax, alpha=alpha)
-    # ring.plot_layout_sphere(ax, view="observer left")
-    # plt.savefig(f'plots/fit_fake_line/{name}/setup.png', dpi=300)
+    ring.plot_sphere_with_auroral_ring(ax, alpha=0)
+    ring.plot_layout_sphere(ax, view="observer left")
+    plt.savefig(f'plots/fit_fake_line/{name}/setup.png', dpi=300)
 
-    # # - LOG-LIKELIHOOD ESTIMATE
+    # - LOG-LIKELIHOOD ESTIMATE
 
-    # def log_likelihood(theta: tuple) -> np.array:  
+    def log_likelihood(theta: tuple) -> np.array:  
 
-    #     latitude, log_f = theta
+        latitude, log_f = theta
         
-    #     model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude, 
-    #                                         ALPHA, v_bins, convert_to_kms=convert_to_kms, norm=11)
+        model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude, 
+                                            alpha, v_bins, convert_to_kms=convert_to_kms)
 
-    #     mf = np.max(model)
+        if np.isnan(model).any():
+            return -np.inf
+        else:
+            sigma2 = flux_err**2 + model**2 * np.exp(2 * log_f)
+            return -0.5 * np.sum((ffa - model) ** 2 / sigma2 + np.log(sigma2))
+
+    # nll = lambda *args: -log_likelihood(*args)
+    # initial = np.array([sin_latitude_true, logf_true]) + 0.01 * np.random.randn(4)
+    # soln = minimize(nll, initial)
+    # i, m, l, lf = soln.x
+
+    # print("Maximum likelihood estimates:")
+    # print("i_rot = {0:.3f}".format(np.arcsin(i)*180/np.pi))
+    # print("logf = {0:.3f}".format(lf))
+    # print("m = {0:.3f}".format(np.arcsin(m)*180/np.pi))
+    # print("l = {0:.3f}".format(np.arcsin(l)*180/np.pi))
+
+
+    # - MCMC
+
+    # initialize the walkers
+    pos = np.array([1.5,-3]) + 0.01*np.random.randn(32, 2)
+    nwalkers, ndim = pos.shape
+
+    # parallelize the process
+    with Pool(processes=5) as pool:
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, 
+                                        #args=(ffa, flux_err, v_bins, phi, convert_to_kms),
+                                        pool=pool)
+        # run MCMC
+        sampler.run_mcmc(pos, 15000, progress=True)
+
+
+    # - WALKER PLOT
+
+    fig, axes = plt.subplots(2, figsize=(10, 5), sharex=True)
+    samples = sampler.get_chain(discard=5000 )
+
+
+    # save samples to csv file
+    df = pd.DataFrame(samples.reshape(-1,2), columns=["l","f"])
+    df.to_csv(f'plots/fit_fake_line/{name}/samples.csv', index=False)
+
+
+    labels = ["l","f"]
+
+    for i in range(ndim):
+        ax = axes[i]
+        ax.plot(samples[:, :, i], "w", alpha=0.3)
+        ax.set_xlim(0, len(samples))
+        ax.set_ylabel(labels[i])
+        ax.yaxis.set_label_coords(-0.1, 0.5)
+
+    axes[-1].set_xlabel("step number")
+    plt.savefig(f'plots/fit_fake_line/{name}/walkers.png', dpi=300)
+
+    # - CORNER PLOT
+
+    flat_samples = sampler.get_chain(discard=5000, thin=15, flat=True)
+
+    fig = corner.corner(flat_samples, labels=labels, 
+                        truths=np.arcsin(np.array([
+                                                   sin_latitude_true,0.1]))* 180 /np.pi)
+    plt.savefig(f'plots/fit_fake_line/{name}/corner.png', dpi=300)
         
-    #     if mf != 0:
-    #         model /= mf
-
-    #     if np.isnan(model).any():
-    #         return -np.inf
-    #     else:
-    #         sigma2 = flux_err**2 + model**2 * np.exp(2 * log_f)
-    #         return -0.5 * np.sum((ffa - model) ** 2 / sigma2 + np.log(sigma2))
-
-    # # nll = lambda *args: -log_likelihood(*args)
-    # # initial = np.array([sin_latitude_true, logf_true]) + 0.01 * np.random.randn(4)
-    # # soln = minimize(nll, initial)
-    # # i, m, l, lf = soln.x
-
-    # # print("Maximum likelihood estimates:")
-    # # print("i_rot = {0:.3f}".format(np.arcsin(i)*180/np.pi))
-    # # print("logf = {0:.3f}".format(lf))
-    # # print("m = {0:.3f}".format(np.arcsin(m)*180/np.pi))
-    # # print("l = {0:.3f}".format(np.arcsin(l)*180/np.pi))
-
-
-    # # - MCMC
-
-    # # initialize the walkers
-    # pos = np.array([1.5,-3]) + 0.01*np.random.randn(32, 2)
-    # nwalkers, ndim = pos.shape
-
-    # # parallelize the process
-    # with Pool(processes=5) as pool:
-    #     sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, 
-    #                                     #args=(ffa, flux_err, v_bins, phi, convert_to_kms),
-    #                                     pool=pool)
-    #     # run MCMC
-    #     sampler.run_mcmc(pos, 15000, progress=True)
-
-
-    # # - WALKER PLOT
-
-    # fig, axes = plt.subplots(2, figsize=(10, 5), sharex=True)
-    # samples = sampler.get_chain(discard=5000 )
-
-
-    # # save samples to csv file
-    # df = pd.DataFrame(samples.reshape(-1,2), columns=["l","f"])
-    # df.to_csv(f'plots/fit_fake_line/{name}/samples.csv', index=False)
-
-
-    # labels = ["l","f"]
-
-    # for i in range(ndim):
-    #     ax = axes[i]
-    #     ax.plot(samples[:, :, i], "w", alpha=0.3)
-    #     ax.set_xlim(0, len(samples))
-    #     ax.set_ylabel(labels[i])
-    #     ax.yaxis.set_label_coords(-0.1, 0.5)
-
-    # axes[-1].set_xlabel("step number")
-    # plt.savefig(f'plots/fit_fake_line/{name}/walkers.png', dpi=300)
-
-    # # - CORNER PLOT
-
-    # flat_samples = sampler.get_chain(discard=5000, thin=15, flat=True)
-
-    # fig = corner.corner(flat_samples, labels=labels, 
-    #                     truths=np.arcsin(np.array([
-    #                                                sin_latitude_true,0.1]))* 180 /np.pi)
-    # plt.savefig(f'plots/fit_fake_line/{name}/corner.png', dpi=300)
-        
-    # # make a figure with the best result for the spectral line
-    # latitude, log_f = np.median(flat_samples, axis=0)
-    # model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude, 
-    #                                         ALPHA, v_bins, convert_to_kms=convert_to_kms, norm=11)
+    # make a figure with the best result for the spectral line
+    latitude, log_f = np.median(flat_samples, axis=0)
+    model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude, 
+                                            ALPHA, v_bins, convert_to_kms=convert_to_kms)
     
-    # mf = np.max(model)
-    # if mf != 0:
-    #     model /= mf
+    mf = np.max(model)
+    if mf != 0:
+        model /= mf
 
-    # plt.figure(figsize=(7,6))
-    # plt.errorbar(ring.v_mids, ffa, yerr = flux_err, label='model')
-    # plt.plot(ring.v_mids, model, label='best fit')
-    # plt.legend(frameon=False)
-    # plt.xlabel('v [km/s]')
-    # plt.ylabel('normalized flux')
-    # plt.savefig(f'plots/fit_fake_line/{name}/line_fit.png', dpi=300)
+    plt.figure(figsize=(7,6))
+    plt.errorbar(ring.v_mids, ffa, yerr = flux_err, label='model')
+    plt.plot(ring.v_mids, model, label='best fit')
+    plt.legend(frameon=False)
+    plt.xlabel('v [km/s]')
+    plt.ylabel('normalized flux')
+    plt.savefig(f'plots/fit_fake_line/{name}/line_fit.png', dpi=300)
 
 
 
