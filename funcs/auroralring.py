@@ -39,7 +39,7 @@ class AuroralRing:
 
     # init function takes the parameters of the ring and sets up the phi array
     def __init__(self, i_rot, i_mag, latitude, width, Rstar, P_rot, 
-                 N=1000, gridsize=int(1e5), norm=10, v_bins=None,
+                 N=1000, gridsize=int(1e5), v_bins=None,
                  v_mids=None, phi=None, omega=None, convert_to_kms=None):
         """Initialize the AuroralRing class.
 
@@ -63,8 +63,6 @@ class AuroralRing:
         gridsize : int
             The number of grid points to use for the numerical
             calculation of the ring.
-        norm : float
-            The normalization factor to use for the flux.
         v_bins : array
             The velocity bins to use for the spectral line.
         v_mids : array
@@ -123,8 +121,6 @@ class AuroralRing:
         else:
             self.v_mids = v_mids
 
-        # normalization factor for the analytical flux calculation
-        self.norm = norm
 
     # define a method to get the flux of the ring
     def get_flux_analytically(self, alpha):
@@ -141,7 +137,7 @@ class AuroralRing:
             The flux of the ring at the given rotational phase.
         """
         return get_analytical_spectral_line(self.phi, self.i_rot, self.i_mag, self.latitude, 
-                                            alpha, self.v_bins, self.convert_to_kms, norm=self.norm)
+                                            alpha, self.v_bins, self.convert_to_kms)
     
     # define a method to get the flux of the ring numerically
     def get_flux_numerically(self, alpha, normalize=True):

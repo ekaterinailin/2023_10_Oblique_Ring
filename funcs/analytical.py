@@ -11,8 +11,9 @@ from numpy import pi, sin, cos, sqrt, abs, arcsin, max, digitize, bincount
 
 import numpy as np
 
+import matplotlib.pyplot as plt
 
-def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, convert_to_kms, norm=10):
+def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, convert_to_kms):
     """Calculate the broadened spectral line of the infinitesimally narrow
     auroral ring.
     
@@ -30,8 +31,6 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
         The rotational phase of the star in rad.
     bins : int
         The number of velocity bins to use for the spectral line.
-    norm : float
-        The normalization factor for the flux. Default is 10.
     convert_to_kms : float
         The conversion factor to convert from stellar radii / s to km / s.pyt
         
@@ -54,29 +53,23 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
     v = v_phi(phi, X, Y, Z)
     x = x_phi(phi, A, B, C)
 
-    # print(v.shape, x.shape)
-
     # get the flux
-    flux = flux_at_x_vx(v, x, X, Y, Z, norm=norm)
+    flux = flux_at_x_vx(x)
     # print(flux.shape)
 
-    # mask the flux
-    flux[x<0] = 0
-    # print(flux.shape)
-    # # convert to stellar radii / s and then to km/s
-    v = v * convert_to_kms 
+    # mask all the negative positions
+    q = x > 0
 
-    # define the bins
-    digitized = digitize(v, bins)
+    # convert to km/s
+    v = v[q] * convert_to_kms 
 
-    # calculate the flux in each bin
-    flux_ = bincount(digitized.flatten(order="C"), weights=flux.flatten(order="C"), minlength=len(bins) - 1)
+    flux_, bins = np.histogram(v, bins=bins, weights=flux[q])
 
     # normalize the flux unless it is all zeros
     if max(flux_) != 0:
         flux_ = flux_ / max(flux_)
 
-    flux_ = np.insert(flux_[1:],-1,0)
+    # flux_ = np.insert(flux_[1:],-1,0)
     
     return flux_
 
@@ -196,36 +189,21 @@ def vx_params(alpha, i_rot, i_mag, latitude):
     return X, Y, Z
 
 
-def flux_at_x_vx(vx, x, X, Y, Z, norm=10):
-    """Calculate the flux of the ring at a given x position and x-velocity.
-    Use the derivative of the phi(vx) function to calculate the flux, then 
-    multiply by the geometrical foreshortening factor.
+def flux_at_x_vx(x):
+    """Calculate the flux of the ring at a given x position by the foreshortening factor.
     
     Parameters
     ----------
-    vx : array
-        The x-velocity of the ring.
     x : array
         The x position of the ring.
-    X : float
-        The X parameter of the ring velocity.
-    Y : float
-        The Y parameter of the ring velocity.
-    Z : float
-        The Z parameter of the ring velocity.
-    norm : float
-        The normalisation factor to deal with the 
-        singularity when denominator becomes zero.
 
     Returns
     -------
     flux : array
-        The flux of the ring at the given positions and velocities.
+        The flux of the ring at the given positions.
     """
-    foreshortening = cos(pi/2 - arcsin(x)) 
-    flux = 1 / sqrt(-(vx - X)**2 + Y**2 + Z**2 + norm)
+    return cos(pi/2 - arcsin(x)) 
     
-    return flux * foreshortening
 
 
 
