@@ -8,43 +8,40 @@ import matplotlib.pyplot as plt
 from funcs.analytical import get_analytical_spectral_line
 from funcs.auroralring import AuroralRing
 
-from scipy.optimize import minimize
 from multiprocessing import Pool
 import emcee
 import corner
 
+# dark mode
+plt.style.use('dark_background')
 
-def get_full_numerical_line(alpha):
-    full_flux_numerical = np.zeros_like(ring.v_mids)
-    for a in alpha:
-        full_flux_numerical += ring.get_flux_numerically(a, normalize=False)
-
-    return full_flux_numerical / np.max(full_flux_numerical)
 
 
 def log_prior(theta: tuple) -> float:
-    # l, logf = theta
+
     l = theta[0]
 
-    # if  (0 < l < np.pi/2) and (-10 < logf < -3):
     if  (0 < l < np.pi/2):
         return 0.0
+
     return -np.inf
 
 
 def log_probability(theta: tuple) -> float:
+
     lp = log_prior(theta)
+    
     if not np.isfinite(lp):
         return -np.inf
+    
     return lp + log_likelihood(theta)
 
-# dark mode
-plt.style.use('dark_background')
+
 
 # start script
 if __name__ == "__main__":
 
-    name = "2024_02_23_5"
+    name = "2024_03_04_1"
 
     # if plots/fit_fake_line/{name} does not exist, create it
     if not os.path.exists(f'plots/fit_fake_line/{name}/'):
@@ -62,40 +59,40 @@ if __name__ == "__main__":
 
     # stellar parameters
     P_rot= 2.84 / 24. # 2.84 hours from Hallinan+2015
-    omega = 2*np.pi/P_rot
+    omega = 2 * np.pi / P_rot
     Rstar = 0.1 # 0.1 solar radii roughly because M9 type
-    vmax = omega * Rstar * 695700. / 86400.
-    convert_to_kms = omega / 86400 * Rstar * 695700.
+    vmax = omega * Rstar * 695700. / 86400. # in km/s
 
     # velocity bins and angle bins
     v_bins = np.linspace(-vmax*1.05, vmax*1.05, 201)
     v_mids = (v_bins[1:] + v_bins[:-1])/2
 
-    # set up the phi angle
+    # set up the phi angle resolution
     phi = np.linspace(0, 2*np.pi, 180)
 
     
-    # set up the rin
+    # set up the ring
     ring = AuroralRing(i_rot=i_rot_true, i_mag=i_mag_true, latitude=latitude_true,
                     width=0.2 * np.pi/180, Rstar=Rstar, P_rot=P_rot, N=60, 
                      gridsize=int(4e5), v_bins=v_bins, v_mids=v_mids,
-                    phi=phi, omega=omega, convert_to_kms=convert_to_kms)
+                    phi=phi, omega=omega, convert_to_kms=vmax)
 
+    # phase coverage
     int_from = np.pi
     int_to = np.pi / 2 * 3
     alpha = np.linspace(int_from, int_to, 100)    
 
 
     # use numerical flux as input data
-    ffa_ = get_full_numerical_line(alpha)
-
+    numerical_ideal = ring.get_full_numerical_line(alpha)
 
     # add some noise
     err = 0.1
     flux_err = np.ones_like(v_mids) * err
-    ffa =  ffa_ + np.random.normal(0, err, len(ffa_))
+    numerical_noisy =  numerical_ideal + np.random.normal(0, err, len(numerical_ideal))
     
-    alpha = alpha.reshape(100,1)
+    # get analytical line to compare to
+    alpha = alpha.reshape(100,1) # reshape to make dimensionality match
     model = ring.get_flux_analytically(alpha)
    
 
@@ -111,18 +108,21 @@ if __name__ == "__main__":
         f.write(f'# maximum velocity = {vmax:.3f} km/s\n')
         f.write(f'# omega = {omega:.3f} rad/day\n')
 
-    # - write out the data and true line, i.e. vmids, ffa, and full_flux_numerical
-    # make a pandas dataframe
-    df = pd.DataFrame({'v_mids': v_mids, 'ffa': ffa, 'full_flux_numerical': ffa_})
+    # WRITE THE INPUT DATA TO A CSV FILE
+    df = pd.DataFrame({'v_mids': v_mids, 
+                       'numerical_ideal': numerical_ideal, 
+                       'numerical_noisy': numerical_noisy,
+                       'analytical_ideal': model})
+    
     df.to_csv(f'plots/fit_fake_line/{name}/data.csv', index=False)
 
 
     # - SHOW THE INPUT FAKE LINE
     
     plt.figure(figsize=(7,6))
-    plt.errorbar(ring.v_mids, ffa, yerr = flux_err, label='numerical w/ error')
-    plt.plot(ring.v_mids, ffa_, label='numerical')
-    plt.plot(ring.v_mids, model, label='analytical', c="w", linestyle="--")
+    plt.errorbar(ring.v_mids, numerical_noisy, yerr = flux_err, label='numerical w/ noise')
+    plt.plot(ring.v_mids, numerical_ideal, label='numerical w/o noise')
+    plt.plot(ring.v_mids, model, label='analytical w/o noise', c="w", linestyle="--")
     plt.legend(frameon=False)
     plt.xlabel('v [km/s]')
     plt.ylabel('normalized flux')
@@ -133,7 +133,6 @@ if __name__ == "__main__":
     # - SHOW THE GEOMETRICAL SETUP
 
     fig, ax = ring.plot_setup_sphere()
-
     ring.plot_sphere_with_auroral_ring(ax, alpha=0)
     ring.plot_layout_sphere(ax, view="observer left")
     plt.savefig(f'plots/fit_fake_line/{name}/setup.png', dpi=300)
@@ -146,16 +145,16 @@ if __name__ == "__main__":
         latitude = theta[0]
         
         model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude, 
-                                            alpha, v_bins, convert_to_kms=convert_to_kms)
+                                            alpha, v_bins, convert_to_kms=vmax)
 
         if np.isnan(model).any():
             return -np.inf
         elif np.isinf(model).any():
             return -np.inf
         else:
-            sigma2 = flux_err**2 #+ model**2 * np.exp(2 * log_f)
+            sigma2 = flux_err**2
             
-            return -0.5 * np.sum((ffa - model) ** 2 / sigma2 + np.log(sigma2))
+            return -0.5 * np.sum((numerical_noisy - model) ** 2 / sigma2 + np.log(sigma2))
 
 
     # - MCMC
@@ -167,7 +166,6 @@ if __name__ == "__main__":
     # parallelize the process
     with Pool(processes=5) as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, 
-                                        #args=(ffa, flux_err, v_bins, phi, convert_to_kms),
                                         pool=pool)
         # run MCMC
         sampler.run_mcmc(pos, 15000, progress=True)
@@ -196,19 +194,11 @@ if __name__ == "__main__":
     axes[-1].set_xlabel("step number")
     plt.savefig(f'plots/fit_fake_line/{name}/walkers.png', dpi=300)
 
-    # - CORNER PLOT
-
-    flat_samples = sampler.get_chain(discard=5000, thin=15, flat=True)
-
-    fig = corner.corner(flat_samples, labels=labels, 
-                        truths=np.arcsin(np.array([
-                                                   sin_latitude_true,0.1]))* 180 /np.pi)
-    plt.savefig(f'plots/fit_fake_line/{name}/corner.png', dpi=300)
         
     # make a figure with the best result for the spectral line
-    latitude, log_f = np.median(flat_samples, axis=0)
+    latitude = np.median(samples, axis=0)
     model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude, 
-                                            alpha, v_bins, convert_to_kms=convert_to_kms)
+                                            alpha, v_bins, convert_to_kms=vmax)
     
     mf = np.max(model)
     if mf != 0:

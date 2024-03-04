@@ -163,6 +163,32 @@ class AuroralRing:
                                        self.omega, self.Rstar, self.v_bins, normalize=normalize)
     
 
+    def get_full_numerical_line(self, alpha):
+        """Calculate the full flux of the ring integrated over several
+        rotational phases alpha.
+
+        Parameters
+        ----------
+        alpha : array
+            The covered rotational phases of the star in rad.
+
+        Returns
+        -------
+        full_flux_numerical : array
+            The full flux of the ring integrated over the rotational phases.
+        """
+
+        # initialize the full flux array with the same shape as the velocity bins
+        full_flux_numerical = np.zeros_like(self.v_mids)
+        
+        # loop over all rotational phases and add up the flux
+        for a in alpha:
+            full_flux_numerical += self.get_flux_numerically(a, normalize=False)
+
+        # normalize the flux and return
+        return full_flux_numerical / np.max(full_flux_numerical)
+        
+
     def plot_sphere_with_auroral_ring(self, ax, alpha):
 
         ax.scatter(np.sin(self.THETA)*np.cos(self.PHI),
