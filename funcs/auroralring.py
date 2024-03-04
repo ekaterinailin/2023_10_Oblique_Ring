@@ -163,7 +163,7 @@ class AuroralRing:
                                        self.omega, self.Rstar, self.v_bins, normalize=normalize)
     
 
-    def get_full_numerical_line(self, alpha):
+    def get_phase_integrated_numerical_line(self, alpha):
         """Calculate the full flux of the ring integrated over several
         rotational phases alpha.
 

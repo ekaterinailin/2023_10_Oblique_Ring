@@ -17,14 +17,7 @@ plt.style.use('dark_background')
 
 
 
-def log_prior(theta: tuple) -> float:
 
-    l = theta[0]
-
-    if  (0 < l < np.pi/2):
-        return 0.0
-
-    return -np.inf
 
 
 def log_probability(theta: tuple) -> float:
@@ -51,7 +44,9 @@ if __name__ == "__main__":
     # set up the ring
     logf_true = np.log(0.5)
     i_rot_true = 140/180*np.pi
+    i_rot_true_sigma = 10/180*np.pi
     i_mag_true = 40 * np.pi/180
+    i_mag_true_sigma = 10 * np.pi/180
     sin_i_mag_true = np.sin(i_mag_true)
     sin_i_rot_true = np.sin(i_rot_true)
     latitude_true = 65*np.pi/180
@@ -130,19 +125,19 @@ if __name__ == "__main__":
     # repeat vmids for each line, and flatten
     vmids_all = np.tile(ring.v_mids, len(phase_starts))
     # flatten the models
-    models = models.reshape(-1)
+    modelsf = models.reshape(-1)
     # flatten the numerical_noisy
-    numerical_noisy = numerical_noisy.reshape(-1)
+    numerical_noisyf = numerical_noisy.reshape(-1)
     # flatten the flux_err
-    flux_err = flux_err.reshape(-1)
+    flux_errf = flux_err.reshape(-1)
     # add index to signify each line
     line_index = np.repeat(np.arange(len(phase_starts)), len(ring.v_mids))
 
     # create a dataframe
     df = pd.DataFrame({'v_mids': vmids_all,
-                       'numerical_noisy': numerical_noisy, 
-                       'flux_err': flux_err, 
-                       'model': models, 
+                       'numerical_noisy': numerical_noisyf, 
+                       'flux_err': flux_errf, 
+                       'model': modelsf, 
                        'line_index': line_index})        
     
 
@@ -153,7 +148,6 @@ if __name__ == "__main__":
     plt.figure(figsize=(7,3*len(phase_starts)))
     for i in range(len(phase_starts)):
         index = (df.line_index == i)
-        print(df.v_mids[index])
         plt.errorbar(df.v_mids[index].values, df.numerical_noisy[index].values - 1.2*i, 
                      yerr = df.flux_err[index], 
                      label=f'{phase_starts[i]:.2f}-{phase_starts[i]+0.25:.2f}', 
@@ -177,15 +171,24 @@ if __name__ == "__main__":
 
     # - LOG-LIKELIHOOD ESTIMATE
 
+    def log_prior(theta: tuple) -> float:
+
+        l, i_rot, i_mag = theta
+
+        if  (0 < l < np.pi/2) & (0 < i_rot < np.pi) & (0 < i_mag < np.pi/2):
+            return -0.5 * (i_rot - i_rot_true) ** 2 / i_rot_true_sigma ** 2 - 0.5 * (i_mag - i_mag_true) ** 2 / i_mag_true_sigma ** 2
+
+        return -np.inf
+
     def log_likelihood(theta: tuple) -> np.array:  
 
         # latitude, log_f = theta
-        latitude = theta[0]
+        latitude, i_rot, i_mag = theta
         
 
         models = []
         for alpha in alphas:
-            model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude, 
+            model = get_analytical_spectral_line(phi, i_rot, i_mag, latitude, 
                                                 alpha.reshape((100,1)), v_bins, convert_to_kms=vmax)
             models.append(model)
         
@@ -198,14 +201,16 @@ if __name__ == "__main__":
         else:
             sigma2 = flux_err**2
             
-            return -0.5 * np.sum((numerical_noisy.reshape(-1) - models.reshape(-1)) ** 2 / sigma2 + np.log(sigma2))
+            return -0.5 * np.sum(np.sum((numerical_noisy - models) ** 2 / sigma2 + np.log(sigma2)))
 
 
     # - MCMC
 
     # initialize the walkers
-    pos = np.array([.5]) + 0.01*np.random.randn(32, 1)
+    pos = np.array([np.pi/4, 2.5, 0.5]) + 0.01*np.random.randn(32, 3)
     nwalkers, ndim = pos.shape
+    print(nwalkers)
+
 
     # parallelize the process
     with Pool(processes=5) as pool:
@@ -217,30 +222,38 @@ if __name__ == "__main__":
 
 
 
-    samples = sampler.get_chain(discard=5000 )
-    # save samples to csv file
-    df = pd.DataFrame(samples.reshape(-1,1), columns=["l"])
-    df.to_csv(f'plots/fit_fake_line/{name}/samples.csv', index=False)
 
 
-    # - WALKER PLOT
+    # # - WALKER PLOT
 
-    labels = ["l"]
-    plt.figure(figsize=(10, 5))
-    plt.plot(samples, "w", alpha=0.3)
-    plt.set_xlim(0, len(samples))
-    plt.set_ylabel("latitude [deg]")
-    plt.set_xlabel("step number")
+    labels = ["l", 'i_rot', 'i_mag']
+    samples = sampler.get_chain()
+    # set up a three panel plot
+    fig, axes = plt.subplots(3, figsize=(10, 7), sharex=True)
+    for i in range(3):
+        ax = axes[i]
+        ax.plot(samples[i, :], "w", alpha=0.5, linewidth=0.5)
+        ax.set_xlim(0, len(samples))
+        ax.set_ylabel(labels[i])
+        ax.set_xlabel("step number")
+    
     plt.savefig(f'plots/fit_fake_line/{name}/walkers.png', dpi=300)
+
+
+
+    samples = sampler.get_chain(discard=5000 ).reshape(-1,3)
+    # save samples to csv file
+    sdf = pd.DataFrame(samples, columns=["l",'i_rot', 'i_mag'])
+    sdf.to_csv(f'plots/fit_fake_line/{name}/samples.csv', index=False)
 
         
     # make a figure with the best result for the spectral line
-    latitude = np.median(samples, axis=0)
+    latitude_fit, i_rot_fit, i_mag_fit = np.median(samples, axis=0)
 
     models = []
     for alpha in alphas:
-        model = get_analytical_spectral_line(phi, i_rot_true, i_mag_true, latitude, 
-                                            alpha, v_bins, convert_to_kms=vmax)
+        model = get_analytical_spectral_line(phi, i_rot_fit, i_mag_fit, latitude_fit, 
+                                            alpha.reshape(100,1), v_bins, convert_to_kms=vmax)
         models.append(model)
 
     
