@@ -10,14 +10,9 @@ from funcs.auroralring import AuroralRing
 
 from multiprocessing import Pool
 import emcee
-import corner
 
 # dark mode
 plt.style.use('dark_background')
-
-
-
-
 
 
 def log_probability(theta: tuple) -> float:
@@ -217,7 +212,7 @@ if __name__ == "__main__":
         sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, 
                                         pool=pool)
         # run MCMC
-        sampler.run_mcmc(pos, 10000, progress=True)
+        sampler.run_mcmc(pos, 30000, progress=True)
 
 
 
@@ -232,7 +227,7 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(3, figsize=(10, 7), sharex=True)
     for i in range(3):
         ax = axes[i]
-        ax.plot(samples[i, :], "w", alpha=0.5, linewidth=0.5)
+        ax.plot(samples[:,:,i], "w", alpha=0.5, linewidth=0.5)
         ax.set_xlim(0, len(samples))
         ax.set_ylabel(labels[i])
         ax.set_xlabel("step number")
