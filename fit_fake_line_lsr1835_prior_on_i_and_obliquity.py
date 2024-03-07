@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from funcs.analytical import get_analytical_spectral_line
 from funcs.auroralring import AuroralRing
 
+from scipy.ndimage import gaussian_filter1d
+
 from multiprocessing import Pool
 import emcee
 
@@ -29,7 +31,7 @@ def log_probability(theta: tuple) -> float:
 # start script
 if __name__ == "__main__":
 
-    name = "2024_03_04_1"
+    name = "2024_03_06_4"
 
     # if plots/fit_fake_line/{name} does not exist, create it
     if not os.path.exists(f'plots/fit_fake_line/{name}/'):
@@ -45,7 +47,7 @@ if __name__ == "__main__":
     sin_i_mag_true = np.sin(i_mag_true)
     sin_i_rot_true = np.sin(i_rot_true)
     latitude_true = 65*np.pi/180
-    sin_latitude_true = np.sin(latitude_true)
+    phi0 = 0.4 * np.pi * 2
 
     # stellar parameters
     P_rot= 2.84 / 24. # 2.84 hours from Hallinan+2015
@@ -54,28 +56,27 @@ if __name__ == "__main__":
     vmax = omega * Rstar * 695700. / 86400. # in km/s
 
     # velocity bins and angle bins
-    v_bins = np.linspace(-vmax*1.05, vmax*1.05, 201)
+    resol = 55
+    v_bins = np.linspace(-vmax*1.2, vmax*1.2, resol + 1)
     v_mids = (v_bins[1:] + v_bins[:-1])/2
 
     # set up the phi angle resolution
     phi = np.linspace(0, 2*np.pi, 180)
+    thermal_broadening = 20 / 2.355
+    gaussbroadening = resol / 2.1 * thermal_broadening /vmax
+    print(gaussbroadening)
 
-    
     # set up the ring
     ring = AuroralRing(i_rot=i_rot_true, i_mag=i_mag_true, latitude=latitude_true,
                     width=0.2 * np.pi/180, Rstar=Rstar, P_rot=P_rot, N=60, 
                      gridsize=int(4e5), v_bins=v_bins, v_mids=v_mids,
                     phi=phi, omega=omega, convert_to_kms=vmax)
-
-    # phase coverage
-    int_from = np.pi
-    int_to = np.pi / 2 * 3
-    alpha = np.linspace(int_from, int_to, 100)    
+ 
 
     # produce list of alpha arrays, which each cover one quarter of the rotation
-    phase_starts = [0,0.25,0.5,0.75]
-    alphas = np.array([np.linspace(phase_start * np.pi * 2,
-                                   (phase_start + 0.25) * np.pi * 2, 100) for phase_start in phase_starts])
+    phase_starts = [0.,0.25,0.5,0.75]
+    alphas = np.array([np.linspace(phase_start * np.pi * 2 + phi0,
+                                   (phase_start + 0.25) * np.pi * 2 + phi0, 100)%(2*np.pi) for phase_start in phase_starts])
     
     # use numerical flux as input data
     numerical_ideals = []
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     numerical_ideals = np.concatenate(numerical_ideals)
 
     # add some noise
-    err = 0.1
+    err = 0.05
     flux_err = np.ones_like(numerical_ideals) * err
     numerical_noisy =  numerical_ideals + np.random.normal(0, err, numerical_ideals.shape)
 
@@ -94,13 +95,27 @@ if __name__ == "__main__":
     
 
     # get analytical line to compare to
-    models = []
+    models_ideal = []
+    models_ideal_nogauss = []
     for alpha in alphas:
         alpha = alpha.reshape(100,1)# reshape to make dimensionality match
-        models.append(ring.get_flux_analytically(alpha))
+        model = ring.get_flux_analytically(alpha)
+        models_ideal_nogauss.append(model)
+        model = gaussian_filter1d(model, gaussbroadening, mode="constant", cval=0)
+        models_ideal.append(model)
      
     # convert to numpy array
-    models = np.concatenate(models)
+    models_ideal = np.concatenate(models_ideal)
+    models_ideal_nogauss = np.concatenate(models_ideal_nogauss)
+
+    # convolbe models_ideal with a gaussian with a width of 10km/s
+
+    
+    models_noisy = models_ideal + np.random.normal(0, err, models_ideal.shape)
+
+
+    # convert 5km/s 
+
 
     # - write out a file with the input data using f-notation
     with open(f'plots/fit_fake_line/{name}/input.txt', 'w') as f:
@@ -120,7 +135,8 @@ if __name__ == "__main__":
     # repeat vmids for each line, and flatten
     vmids_all = np.tile(ring.v_mids, len(phase_starts))
     # flatten the models
-    modelsf = models.reshape(-1)
+    models_idealf = models_ideal.reshape(-1)
+
     # flatten the numerical_noisy
     numerical_noisyf = numerical_noisy.reshape(-1)
     # flatten the flux_err
@@ -132,7 +148,7 @@ if __name__ == "__main__":
     df = pd.DataFrame({'v_mids': vmids_all,
                        'numerical_noisy': numerical_noisyf, 
                        'flux_err': flux_errf, 
-                       'model': modelsf, 
+                       'model': models_idealf, 
                        'line_index': line_index})        
     
 
@@ -143,16 +159,19 @@ if __name__ == "__main__":
     plt.figure(figsize=(7,3*len(phase_starts)))
     for i in range(len(phase_starts)):
         index = (df.line_index == i)
-        plt.errorbar(df.v_mids[index].values, df.numerical_noisy[index].values - 1.2*i, 
+        plt.errorbar(df.v_mids[index].values, models_noisy[index] - 1.2*i, 
                      yerr = df.flux_err[index], 
                      label=f'{phase_starts[i]:.2f}-{phase_starts[i]+0.25:.2f}', 
                      alpha=0.5)
+        
+        plt.plot(df.v_mids[index].values, models_ideal_nogauss[index] - 1.2*i, 
+                     alpha=0.5, c="w", linestyle=":")
         plt.plot(df.v_mids[index].values, df.model[index].values - 1.2*i, c="w", linestyle="--")
 
     plt.xlabel('v [km/s]')
     plt.ylabel('normalized flux')
     plt.legend(frameon=False)
-    plt.xlim(-vmax*1.05, vmax*1.05)
+    plt.xlim(-vmax*1.2, vmax*1.2)
     plt.savefig(f'plots/fit_fake_line/{name}/line.png', dpi=300)
     plt.close()
 
@@ -168,23 +187,25 @@ if __name__ == "__main__":
 
     def log_prior(theta: tuple) -> float:
 
-        l, i_rot, i_mag = theta
+        l, i_rot, i_mag, phi0 = theta
 
-        if  (0 < l < np.pi/2) & (0 < i_rot < np.pi) & (0 < i_mag < np.pi/2):
-            return -0.5 * (i_rot - i_rot_true) ** 2 / i_rot_true_sigma ** 2 - 0.5 * (i_mag - i_mag_true) ** 2 / i_mag_true_sigma ** 2
+        if  (0 < l < np.pi/2) & (0 < i_rot < np.pi) & (0 < i_mag < np.pi/2) & (-2*np.pi < phi0 < 2*np.pi):
+            return (-0.5 * (i_rot - i_rot_true) ** 2 / i_rot_true_sigma ** 2
+                    -0.5 * (i_mag - i_mag_true) ** 2 / i_mag_true_sigma ** 2)
 
         return -np.inf
 
     def log_likelihood(theta: tuple) -> np.array:  
 
-        # latitude, log_f = theta
-        latitude, i_rot, i_mag = theta
-        
+        latitude, i_rot, i_mag, phi0 = theta
+        alphas = np.array([np.linspace(phase_start * np.pi * 2 + phi0,
+                                (phase_start + 0.25) * np.pi * 2 + phi0, 100).reshape((100,1)) %(2*np.pi) for phase_start in phase_starts])
 
         models = []
         for alpha in alphas:
             model = get_analytical_spectral_line(phi, i_rot, i_mag, latitude, 
-                                                alpha.reshape((100,1)), v_bins, convert_to_kms=vmax)
+                                                alpha, v_bins, convert_to_kms=vmax)
+            model = gaussian_filter1d(model, gaussbroadening, mode="constant", cval=0)
             models.append(model)
         
         models = np.concatenate(models)
@@ -196,15 +217,20 @@ if __name__ == "__main__":
         else:
             sigma2 = flux_err**2
             
-            return -0.5 * np.sum(np.sum((numerical_noisy - models) ** 2 / sigma2 + np.log(sigma2)))
+            return -0.5 * np.sum(np.sum((models_noisy - models) ** 2 / sigma2 + np.log(sigma2)))
 
+    # # run a minimization to get the best fit parameters
+    # from scipy.optimize import minimize
+
+    # # minimize the negative log likelihood
+    # result = minimize(lambda *x: -log_probability(*x), x0=[1.1, i_rot_true, i_mag_true, 3])
+    # print(result.x)
 
     # - MCMC
 
-    # initialize the walkers
-    pos = np.array([np.pi/4, 2.5, 0.5]) + 0.01*np.random.randn(32, 3)
+    # initialize the walkers with the minimization result
+    pos = np.array([1.1, i_rot_true, i_mag_true, 3.]) + 0.3*np.random.randn(32, 4)
     nwalkers, ndim = pos.shape
-    print(nwalkers)
 
 
     # parallelize the process
@@ -212,20 +238,15 @@ if __name__ == "__main__":
         sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, 
                                         pool=pool)
         # run MCMC
-        sampler.run_mcmc(pos, 30000, progress=True)
+        sampler.run_mcmc(pos, 10000, progress=True)
 
+    # - WALKER PLOT
 
-
-
-
-
-    # # - WALKER PLOT
-
-    labels = ["l", 'i_rot', 'i_mag']
+    labels = ["l", 'i_rot', 'i_mag', 'phi0']
     samples = sampler.get_chain()
-    # set up a three panel plot
-    fig, axes = plt.subplots(3, figsize=(10, 7), sharex=True)
-    for i in range(3):
+    # set up a four panel plot
+    fig, axes = plt.subplots(4, figsize=(10, 10), sharex=True)
+    for i in range(4):
         ax = axes[i]
         ax.plot(samples[:,:,i], "w", alpha=0.5, linewidth=0.5)
         ax.set_xlim(0, len(samples))
@@ -236,35 +257,40 @@ if __name__ == "__main__":
 
 
 
-    samples = sampler.get_chain(discard=5000 ).reshape(-1,3)
+    samples = sampler.get_chain(discard=5000 ).reshape(-1,4)
     # save samples to csv file
-    sdf = pd.DataFrame(samples, columns=["l",'i_rot', 'i_mag'])
+    sdf = pd.DataFrame(samples, columns=["l",'i_rot', 'i_mag', 'phi0'])
     sdf.to_csv(f'plots/fit_fake_line/{name}/samples.csv', index=False)
 
         
     # make a figure with the best result for the spectral line
-    latitude_fit, i_rot_fit, i_mag_fit = np.median(samples, axis=0)
+    latitude_fit, i_rot_fit, i_mag_fit, phio_0_fit = np.median(samples, axis=0)
+
+    alphas = np.array([np.linspace((phase_start * np.pi * 2 + phio_0_fit),
+                                   ((phase_start + 0.25) * np.pi * 2 + phio_0_fit), 100)  % (2*np.pi)
+                                   for phase_start in phase_starts])
 
     models = []
     for alpha in alphas:
         model = get_analytical_spectral_line(phi, i_rot_fit, i_mag_fit, latitude_fit, 
                                             alpha.reshape(100,1), v_bins, convert_to_kms=vmax)
+        model = gaussian_filter1d(model, gaussbroadening, mode="constant", cval=0)
         models.append(model)
+    models = np.concatenate(models)    
 
-    
-
-    plt.figure(figsize=(7,6))
+    plt.figure(figsize=(7,12))
     for i in range(len(phase_starts)):
         index = (df.line_index == i)
-        plt.errorbar(df.v_mids[index].values, df.numerical_noisy[index].values - 1.2*i, 
+        plt.errorbar(df.v_mids[index].values, models_noisy[index] - 1.2*i + 4, 
                      yerr = df.flux_err[index], 
                      label=f'{phase_starts[i]:.2f}-{phase_starts[i]+0.25:.2f}', 
                      alpha=0.5)
-        plt.plot(df.v_mids[index].values, models[i] - 1.2*i, c="w", linestyle="--")
-  
+        plt.plot(df.v_mids[index].values, models[index] - 1.2*i + 4, c="w", linestyle="--")
+        plt.plot(df.v_mids[index].values, models_ideal[index] - 1.2*i + 4, c="w", linestyle=":", alpha=0.5)
     plt.legend(frameon=False)
     plt.xlabel('v [km/s]')
     plt.ylabel('normalized flux')
+    plt.xlim(-vmax*1.2, vmax*1.2)
     plt.savefig(f'plots/fit_fake_line/{name}/line_fit.png', dpi=300)
 
 
