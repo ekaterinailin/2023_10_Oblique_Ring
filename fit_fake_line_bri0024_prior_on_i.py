@@ -39,7 +39,6 @@ if __name__ == "__main__":
 
 
     # set up the ring
-    logf_true = np.log(0.5)
     i_rot_true = 51.7/180*np.pi
     i_rot_true_sigma = 5/180*np.pi
     i_mag_true = 55 * np.pi/180
@@ -87,7 +86,7 @@ if __name__ == "__main__":
     numerical_ideals = np.concatenate(numerical_ideals)
 
     # add some noise
-    err = 0.05
+    err = 1/18.
     flux_err = np.ones_like(numerical_ideals) * err
     numerical_noisy =  numerical_ideals + np.random.normal(0, err, numerical_ideals.shape)
 
@@ -123,7 +122,6 @@ if __name__ == "__main__":
         f.write(f'# inclination of rot. axis = {i_rot_true*180/np.pi:.3f} deg\n')
         f.write(f'# mag. obliquity = {i_mag_true*180/np.pi:.3f} deg\n')
         f.write(f'# latitude = {latitude_true*180/np.pi:.3f} deg\n')
-        f.write(f'# logf = {logf_true:.3f}\n')
         f.write(f'# rel. err. = {err:.3f}\n')
         f.write(f'# stellar rotation period = {P_rot:.3f} d\n')
         f.write(f'# stellar radius = {Rstar:.3f} solar radii\n')

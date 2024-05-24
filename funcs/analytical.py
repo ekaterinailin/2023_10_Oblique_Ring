@@ -7,13 +7,10 @@ Ekaterina Ilin 2023 -- MIT Licencse
 Functions for the analytical model.
 """
 
-from numpy import pi, sin, cos, sqrt, abs, arcsin, max, digitize, bincount
+from numpy import pi, sin, cos, arcsin, max, digitize, bincount
 
-import numpy as np
 
-import matplotlib.pyplot as plt
-
-def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, convert_to_kms):
+def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, v_max):
     """Calculate the broadened spectral line of the infinitesimally narrow
     auroral ring.
     
@@ -31,8 +28,8 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
         The rotational phase of the star in rad.
     bins : int
         The number of velocity bins to use for the spectral line.
-    convert_to_kms : float
-        The conversion factor to convert from stellar radii / s to km / s.pyt
+    v_max : float
+        maximum velocity in km/s
         
     Returns
     -------
@@ -55,25 +52,23 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, conve
 
     # get the flux
     flux = flux_at_x_vx(x)
-    # print(flux.shape)
 
     # mask all the negative positions
     q = x > 0
 
     # convert to km/s
-    v = v[q] * convert_to_kms 
+    v = v[q] * v_max #convert_to_kms 
 
-    # flux_, bins = np.histogram(v, bins=bins, weights=flux[q])
+    # bin the velocities and sum the fluxes
+    digitized = digitize(v, bins, right=True)
 
-    digitized = digitize(v, bins)
-
-    flux_ = bincount(digitized, weights=flux[q], minlength=len(bins) - 1)
+    flux_ = bincount(digitized, weights=flux[q], minlength=len(bins)) #-1
 
     # normalize the flux unless it is all zeros
     if max(flux_) != 0:
         flux_ = flux_ / max(flux_)
     
-    return flux_
+    return flux_[1:]
 
 
 def x_phi(phi, A, B, C):

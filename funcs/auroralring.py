@@ -102,8 +102,9 @@ class AuroralRing:
         if v_bins is None:
             # calculate omega
             
-            vmax = self.omega * self.Rstar * 695700. / 86400. # km/s
-            self.v_bins = np.linspace(-vmax*1.02, vmax*1.02, N)
+            self.vmax = self.omega * self.Rstar * 695700. / 86400. # km/s
+        
+            self.v_bins = np.linspace(-self.vmax*1.02, self.vmax*1.02, N)
         else:
             self.v_bins = v_bins
 
@@ -137,7 +138,7 @@ class AuroralRing:
             The flux of the ring at the given rotational phase.
         """
         return get_analytical_spectral_line(self.phi, self.i_rot, self.i_mag, self.latitude, 
-                                            alpha, self.v_bins, self.convert_to_kms)
+                                            alpha, self.v_bins, self.vmax)
     
     # define a method to get the flux of the ring numerically
     def get_flux_numerically(self, alpha, normalize=True):
@@ -189,36 +190,39 @@ class AuroralRing:
         return full_flux_numerical / np.max(full_flux_numerical)
         
 
-    def plot_sphere_with_auroral_ring(self, ax, alpha):
+    def plot_sphere_with_auroral_ring(self, ax, alpha, c_ring="cyan",
+                                      c_sphere="grey", c_irot="red",
+                                      c_imag="yellow", sphere_alpha=0.1,
+                                      ring_alpha=0.5):
 
         ax.scatter(np.sin(self.THETA)*np.cos(self.PHI),
               np.sin(self.THETA)*np.sin(self.PHI),
-              np.cos(self.THETA), c='grey', alpha=0.01)
+              np.cos(self.THETA), c=c_sphere, alpha=sphere_alpha)
 
         # plot the x axis as a dashed line
-        ax.plot([-1, 1], [0, 0], [0, 0], c='w', ls='--')
+        ax.plot([-1, 1], [0, 0], [0, 0], c='k', ls='--')
 
         z_mag_alpha = rotate_around_arb_axis(alpha, self.z_rot_mag, self.z_rot)
 
         xr, yr, zr = rotate_around_arb_axis(alpha, np.array([self.x, self.y, self.z]), self.z_rot)
 
         # plot z_rot
-        ax.plot([0, 1.5 *self.z_rot[0]], [0, 1.5 *self.z_rot[1]], [0,1.5 * self.z_rot[2]], c='r')
-
-
-        # plot z_rot_mag
-        ax.plot([0, z_mag_alpha[0]], [0, z_mag_alpha[1]], [0, z_mag_alpha[2]], c='yellow')
+        ax.plot([0, 1.5 *self.z_rot[0]], [0, 1.5 *self.z_rot[1]], [0,1.5 * self.z_rot[2]], c=c_irot)
 
         # THE RING ----------
 
         # plot the rotated blue points
-        ax.scatter(xr, yr, zr, alpha=1)
+        ax.scatter(xr, yr, zr, alpha=ring_alpha, c=c_ring)
+
+
+        # plot z_rot_mag
+        ax.plot([0, z_mag_alpha[0]], [0, z_mag_alpha[1]], [0, z_mag_alpha[2]], c=c_imag)
 
     def plot_layout_sphere(self, ax, view="observer front"):
         # set figure limits
         ax.set_xlim(-1.2, 1.2)
         ax.set_ylim(-1.2, 1.2)
-        ax.set_zlim(-1., 1.)
+        ax.set_zlim(-.95, .95)
 
         # label axes
         ax.set_xlabel('X')
@@ -230,6 +234,8 @@ class AuroralRing:
             ax.view_init(0, 0)
         elif view == "observer left":
             ax.view_init(0, 90)
+        elif (type(view) is float) or (type(view) is int):
+            ax.view_init(0, view)
 
         # let axes disappear
         ax.set_axis_off()
