@@ -124,13 +124,15 @@ class AuroralRing:
 
 
     # define a method to get the flux of the ring
-    def get_flux_analytically(self, alpha):
+    def get_flux_analytically(self, alpha, foreshortening=False, normalize=True):
         """Calculate the flux of the ring at a given rotational phase.
 
         Parameters
         ----------
         alpha : float
             The rotational phase of the star in rad.
+        forehortening : bool
+            Whether to include geometric (Lambertian) foreshortening in the calculation.
 
         Returns
         -------
@@ -138,16 +140,21 @@ class AuroralRing:
             The flux of the ring at the given rotational phase.
         """
         return get_analytical_spectral_line(self.phi, self.i_rot, self.i_mag, self.latitude, 
-                                            alpha, self.v_bins, self.vmax)
+                                            alpha, self.v_bins, self.vmax, foreshortening=foreshortening,
+                                            normalize=normalize)
     
     # define a method to get the flux of the ring numerically
-    def get_flux_numerically(self, alpha, normalize=True):
+    def get_flux_numerically(self, alpha, normalize=True, foreshortening=False):
         """Calculate the flux of the ring at a given rotational phase.
 
         Parameters
         ----------
         alpha : float
             The rotational phase of the star in rad.
+        normalize : bool
+            Whether to normalize the flux.
+        foreshortening : bool
+            Whether to include geometric (Lambertian) foreshortening in the calculation.
 
         Returns
         -------
@@ -161,7 +168,8 @@ class AuroralRing:
         
         # calculate the flux
         return numerical_spectral_line(alpha, self.x, self.y, self.z, self.z_rot,
-                                       self.omega, self.Rstar, self.v_bins, normalize=normalize)
+                                       self.omega, self.Rstar, self.v_bins, normalize=normalize,
+                                       foreshortening=foreshortening)
     
 
     def get_phase_integrated_numerical_line(self, alpha):

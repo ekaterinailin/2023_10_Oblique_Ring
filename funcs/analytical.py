@@ -10,7 +10,8 @@ Functions for the analytical model.
 from numpy import pi, sin, cos, ones_like, max, digitize, bincount, isfinite
 
 
-def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, v_max):
+def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, v_max,
+                                 foreshortening=False, normalize=True):
     """Calculate the broadened spectral line of the infinitesimally narrow
     auroral ring.
     
@@ -30,6 +31,10 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, v_max
         The number of velocity bins to use for the spectral line.
     v_max : float
         maximum velocity in km/s
+    foreshortening : bool
+        Whether to include geometric (Lambertian) foreshortening in the calculation.
+    normalize : bool
+        Whether to normalize the flux.
         
     Returns
     -------
@@ -51,7 +56,7 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, v_max
     x = x_phi(phi, A, B, C)
 
     # get the flux
-    flux = flux_at_x_vx(x)
+    flux = flux_at_x_vx(x, foreshortening=foreshortening)
 
     # mask all the negative positions
     q = x > 0
@@ -65,10 +70,12 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, v_max
     flux_ = bincount(digitized, weights=flux[q], minlength=len(bins)) #-1
 
     # normalize the flux unless it is all zeros
-    if max(flux_) != 0:
-        flux_ = flux_ / max(flux_)
-    
-    return flux_[1:]
+    if normalize:
+        if max(flux_) != 0:
+            flux_ = flux_ / max(flux_)
+            return flux_[1:]
+    else:   
+        return flux_[1:]
 
 
 def x_phi(phi, A, B, C):
