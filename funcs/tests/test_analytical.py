@@ -16,19 +16,18 @@ def test_get_analytical_spectral_line():
     """Test the get_analytical_spectral_line function.
     """
     # define the parameters
-    i_rot = 0
+    i_rot = 0. # view equator on
     i_mag = 0
     latitude = 0
     alpha = 0
     bins = np.linspace(-20, 20, 100)
-    omega = 2 * np.pi / 3
-    Rstar = 1
+    vmax = 18.
 
     # get the phase angles
     phi = np.linspace(0, 2*np.pi, 1000)
 
     # get the flux
-    flux = get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, omega, Rstar, norm=.1)
+    flux = get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, vmax)
 
     # assert that the flux is a numpy array
     assert isinstance(flux, np.ndarray)
@@ -49,8 +48,7 @@ def test_get_analytical_spectral_line():
 
     # maximum flux should be at the edges where the velocity is also highest
     binmids = (bins[1:] + bins[:-1]) / 2
-    maxv = 2 * np.pi * Rstar * 695700 / (3 * 86400)
-    assert binmids[np.argmax(flux)] / maxv == pytest.approx(1, rel=1e-2)
+    assert np.abs(binmids[np.argmax(flux)] / vmax) == pytest.approx(1, rel=2e-2)
 
 
 def test_x_params():
@@ -175,24 +173,19 @@ def test_v_phi():
 def test_flux_at_x_vx():
     """Test the flux_at_x_vx function.
     """
-    vx = np.linspace(-10, 10, 100)
     x = np.linspace(0, 1, 100)
-    X = 0
-    Y = 0
-    Z = 0
     
-    flux = flux_at_x_vx(vx, x, X, Y, Z)
-    
-    # flux is inf at 10 and -10
-    assert ~np.isfinite(flux[-1])
-    assert ~np.isfinite(flux[0])
+    flux = flux_at_x_vx(x)
+
+    assert (flux <= 1).all()
+    assert (flux >= -1).all()
 
     # if you feed nan, you get nan back
-    flux = flux_at_x_vx(np.nan, np.nan, X, Y, Z)
+    with pytest.raises(AssertionError):
+        flux = flux_at_x_vx(np.nan)
 
-    assert np.isnan(flux)
 
     # if you feed x>1 you get nan back
-    flux = flux_at_x_vx(20, 1.1, X, Y, Z) 
+    with pytest.raises(AssertionError):
+        flux = flux_at_x_vx(np.array([20])) 
 
-    assert np.isnan(flux)

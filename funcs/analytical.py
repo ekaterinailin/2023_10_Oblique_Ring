@@ -7,7 +7,7 @@ Ekaterina Ilin 2023 -- MIT Licencse
 Functions for the analytical model.
 """
 
-from numpy import pi, sin, cos, arcsin, max, digitize, bincount
+from numpy import pi, sin, cos, ones_like, max, digitize, bincount, isfinite
 
 
 def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, v_max):
@@ -186,7 +186,7 @@ def vx_params(alpha, i_rot, i_mag, latitude):
     return X, Y, Z
 
 
-def flux_at_x_vx(x):
+def flux_at_x_vx(x, foreshortening=False):
     """Calculate the flux of the ring at a given x position by the foreshortening factor.
     
     Parameters
@@ -198,8 +198,18 @@ def flux_at_x_vx(x):
     -------
     flux : array
         The flux of the ring at the given positions.
+    foreshortening : bool
+        Whether to include geometric (Lambertian) foreshortening in the calculation.
     """
-    return cos(pi/2 - arcsin(x)) 
+    # check that x is a valid input
+    assert isfinite(x).all(), "x is not finite"
+    assert (x >= -1).all(), "x is lower than -1"
+    assert (x <= 1).all(), "x is not less than 1"
+
+    if foreshortening == False:
+        return ones_like(x)
+    else:
+        return x
     
 
 

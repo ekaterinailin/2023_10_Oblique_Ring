@@ -177,7 +177,7 @@ def calculate_surface_element_velocities(alpha, dalpha, x, y, z, z_rot, omega, R
     dxr = dxr / 86400.
      
     # convert to km/s
-    dxr = (dxr * Rstar * 695700.).value
+    dxr = dxr * Rstar * 695700.
 
     # then select only the positive values of xr
     q = (xr1 > 0)
