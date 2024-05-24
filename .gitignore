@@ -5,7 +5,6 @@
 *.so
 *.o
 *.fits
-*.txt
 *.pdf
 *.png
 *.log

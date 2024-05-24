@@ -1,7 +1,7 @@
-from .geometry import rotate_around_arb_axis, calculate_surface_element_velocities
 import numpy as np
 
-import matplotlib.pyplot as plt
+from .geometry import rotate_around_arb_axis, calculate_surface_element_velocities
+
 
 def numerical_spectral_line(alpha, x, y, z, z_rot, omega, Rstar, bins, dalpha=1e-8 * np.pi/180, normalize=True):
     """Calculate the broadened spectral line of the ring defined

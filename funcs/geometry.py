@@ -1,5 +1,4 @@
 import numpy as np
-from astropy.constants import R_sun
 
 
 def set_up_oblique_auroral_ring(THETA, PHI, PHI_max, PHI_min,
@@ -175,10 +174,10 @@ def calculate_surface_element_velocities(alpha, dalpha, x, y, z, z_rot, omega, R
     dxr = (xr2 - xr1) / dalpha * omega 
 
     # convert to stellar radii / s
-    dxr = dxr / (24*3600)
+    dxr = dxr / 86400.
      
     # convert to km/s
-    dxr = (dxr * Rstar * R_sun).value / 1e3 
+    dxr = (dxr * Rstar * 695700.).value
 
     # then select only the positive values of xr
     q = (xr1 > 0)
