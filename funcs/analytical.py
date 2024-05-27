@@ -67,12 +67,14 @@ def get_analytical_spectral_line(phi, i_rot, i_mag, latitude, alpha, bins, v_max
     # bin the velocities and sum the fluxes
     digitized = digitize(v, bins, right=True)
 
-    flux_ = bincount(digitized, weights=flux[q], minlength=len(bins)) #-1
+    flux_ = bincount(digitized, weights=flux[q], minlength=len(bins))
 
     # normalize the flux unless it is all zeros
     if normalize:
         if max(flux_) != 0:
             flux_ = flux_ / max(flux_)
+            return flux_[1:]
+        else:
             return flux_[1:]
     else:   
         return flux_[1:]

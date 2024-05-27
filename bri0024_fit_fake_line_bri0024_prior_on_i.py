@@ -20,6 +20,8 @@ import emcee
 def log_probability(theta: tuple) -> float:
 
     lp = log_prior(theta)
+
+    print(lp)
     
     if not np.isfinite(lp):
         return -np.inf
@@ -31,12 +33,14 @@ def log_probability(theta: tuple) -> float:
 # start script
 if __name__ == "__main__":
 
-    name = "2024_03_07_bri2"
+    name = "2024_05_24_bri"
 
     # if plots/fit_fake_line/{name} does not exist, create it
     if not os.path.exists(f'plots/fit_fake_line/{name}/'):
         os.makedirs(f'plots/fit_fake_line/{name}')
 
+    # metadata
+    obj_name = "BRI 0021-0214"
 
     # set up the ring
     i_rot_true = 51.7/180*np.pi
@@ -62,15 +66,17 @@ if __name__ == "__main__":
 
     # set up the phi angle resolution
     phi = np.linspace(0, 2*np.pi, 180)
+
+    # set up the broadening
+    T_broaden = 7000.
     thermal_broadening = 20 / 2.355
     gaussbroadening = resol / 2.1 * thermal_broadening /vmax
     
-
     # set up the ring
     ring = AuroralRing(i_rot=i_rot_true, i_mag=i_mag_true, latitude=latitude_true,
                     width=0.2 * np.pi/180, Rstar=Rstar, P_rot=P_rot, N=60, 
                      gridsize=int(4e5), v_bins=v_bins, v_mids=v_mids,
-                    phi=phi, omega=omega, convert_to_kms=vmax)
+                    phi=phi)
  
 
     # produce list of alpha arrays, which each cover one quarter of the rotation
@@ -119,7 +125,9 @@ if __name__ == "__main__":
 
     # - write out a file with the input data using f-notation
     with open(f'plots/fit_fake_line/{name}/input.txt', 'w') as f:
+        f.write(f'# name = {obj_name}\n')
         f.write(f'# inclination of rot. axis = {i_rot_true*180/np.pi:.3f} deg\n')
+        f.write(f"# uncertainty on i_rot = {i_rot_true_sigma*180/np.pi:.3f} deg\n")
         f.write(f'# mag. obliquity = {i_mag_true*180/np.pi:.3f} deg\n')
         f.write(f'# latitude = {latitude_true*180/np.pi:.3f} deg\n')
         f.write(f'# rel. err. = {err:.3f}\n')
@@ -128,7 +136,10 @@ if __name__ == "__main__":
         f.write(f'# maximum velocity = {vmax:.3f} km/s\n')
         f.write(f'# omega = {omega:.3f} rad/day\n')
         f.write(f'# number of lines = {len(phase_starts)}\n')
-        f.write(f'# start phases = {phi0}\n')
+        f.write(f'# start phases = {phase_starts}\n')
+        f.write(f'# start phases offset = {phi0}\n')
+        f.write(f'# thermal broadening temperature = {T_broaden:.3f} K\n')
+        
 
     # WRITE THE INPUT DATA TO A CSV FILE including all spectral lines with one line per column
     # repeat vmids for each line, and flatten
@@ -201,8 +212,11 @@ if __name__ == "__main__":
 
         models = []
         for alpha in alphas:
+            # print(i_rot, i_mag, latitude, alpha)
             model = get_analytical_spectral_line(phi, i_rot, i_mag, latitude, 
-                                                alpha, v_bins, convert_to_kms=vmax)
+                                                alpha, v_bins, v_max=vmax)
+            # print(model, gaussbroadening, model.shape)
+            
             model = gaussian_filter1d(model, gaussbroadening, mode="constant", cval=0)
             models.append(model)
         
@@ -214,7 +228,7 @@ if __name__ == "__main__":
             return -np.inf
         else:
             sigma2 = flux_err**2
-            
+            # print(-0.5 * np.sum(np.sum((models_noisy - models) ** 2 / sigma2 + np.log(sigma2))))
             return -0.5 * np.sum(np.sum((models_noisy - models) ** 2 / sigma2 + np.log(sigma2)))
 
     # # run a minimization to get the best fit parameters
@@ -223,6 +237,7 @@ if __name__ == "__main__":
     # # minimize the negative log likelihood
     # result = minimize(lambda *x: -log_probability(*x), x0=[1.1, i_rot_true, i_mag_true, 3])
     # print(result.x)
+
 
     # - MCMC
 
@@ -235,7 +250,7 @@ if __name__ == "__main__":
 
 
     # parallelize the process
-    with Pool(processes=5) as pool:
+    with Pool(processes=1) as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, 
                                         pool=pool)
         # run MCMC
@@ -274,7 +289,7 @@ if __name__ == "__main__":
     models = []
     for alpha in alphas:
         model = get_analytical_spectral_line(phi, i_rot_fit, i_mag_fit, latitude_fit, 
-                                            alpha.reshape(100,1), v_bins, convert_to_kms=vmax)
+                                            alpha.reshape(100,1), v_bins, v_max=vmax)
         model = gaussian_filter1d(model, gaussbroadening, mode="constant", cval=0)
         models.append(model)
     models = np.concatenate(models)    

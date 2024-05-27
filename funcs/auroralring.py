@@ -87,6 +87,8 @@ class AuroralRing:
         else:   
             self.omega = omega
 
+        self.vmax = self.omega * self.Rstar * 695700. / 86400. # km/s
+
         if convert_to_kms is None:
             self.convert_to_kms = self.Rstar * 695700. / 86400.
         else:
@@ -101,8 +103,6 @@ class AuroralRing:
         # set up velocity bins based on the highest possible velocity
         if v_bins is None:
             # calculate omega
-            
-            self.vmax = self.omega * self.Rstar * 695700. / 86400. # km/s
         
             self.v_bins = np.linspace(-self.vmax*1.02, self.vmax*1.02, N)
         else:
